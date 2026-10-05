@@ -3,10 +3,12 @@ import { openInputs } from './zip.js';
 import { decodeAudio } from './audio.js';
 import { WhisperClient } from './worker-client.js';
 import { downloadBlob, filenameFor, makePDF } from './export.js';
+import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js';
 const $ = id => document.getElementById(id);
 const PREFS_KEY = 'escriba.browser.settings.v2';
 let settings = { ...DEFAULTS }, selected = null, busy = false, controller = null, result = null, toastTimer;
 const client = new WhisperClient();
+let batchRun = null, preparing = false, selectionVersion = 0, selectionController;
 try { settings = optionsFrom(JSON.parse(localStorage.getItem(PREFS_KEY))); } catch { /* Private mode or invalid preferences: use defaults. */ }
 function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4500); }
@@ -20,7 +22,10 @@ function updateLabels() {
 function setBusy(value) {
   busy = value;
   for (const id of ['choose-file', 'file-input', 'remove-file', 'document-title', 'open-settings', 'output-settings', 'delete-job']) $(id).disabled = value;
-  $('transcribe').disabled = value || !selected || !compatible;
+  $('transcribe').disabled = value || preparing || !selected || !compatible;
+  $('retry-batch').disabled = value;
+  $('clear-batches').disabled = value;
+  $('open-settings').disabled = $('output-settings').disabled = value || Boolean(batchRun?.paused);
   $('progress-area').hidden = !value;
   $('dropzone').setAttribute('aria-disabled', String(value));
 }
@@ -30,15 +35,32 @@ function progress(message, detail = '', fraction = null) {
   if (fraction === null) { $('progress-bar').removeAttribute('value'); $('progress-value').textContent = ''; }
   else { const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100); $('progress-bar').value = percent; $('progress-value').textContent = `${percent}%`; }
 }
-function selectFile(file) {
+async function selectFile(file) {
   if (busy || !file) return;
   try { validateFile(file); } catch (error) { notice(error.message); return; }
-  selected = file; $('file-name').textContent = file.name; $('file-size').textContent = bytesLabel(file.size);
-  $('selected-file').hidden = false; $('dropzone').classList.add('has-file'); notice(); setBusy(false);
+  selectionController?.abort(); selectionController = new AbortController();
+  const version = ++selectionVersion;
+  selected = file; preparing = true;
+  $('file-name').textContent = file.name; $('file-size').textContent = bytesLabel(file.size);
+  $('selected-file').hidden = false; $('dropzone').classList.add('has-file');
+  $('batch-plan').hidden = false; $('batch-plan').textContent = 'Conferindo os áudios do arquivo…';
+  notice(); setBusy(false);
+  try {
+    const inputs = await openInputs(file, settings.order, selectionController.signal);
+    if (version !== selectionVersion) return;
+    const message = batchMessage(inputs.entries.length);
+    $('batch-plan').textContent = message || `${inputs.entries.length} áudio(s) encontrado(s). Uma etapa de processamento.`;
+    if (message) $('batch-plan').textContent += '\nOs PDFs serão organizados por áudio, mesmo se TXT estiver selecionado nas configurações.';
+  } catch (error) {
+    if (version !== selectionVersion) return;
+    selected = null; $('batch-plan').hidden = true; notice(error.message);
+  } finally {
+    if (version === selectionVersion) { preparing = false; setBusy(false); }
+  }
 }
 $('choose-file').addEventListener('click', () => $('file-input').click());
 $('file-input').addEventListener('change', event => { selectFile(event.target.files[0]); event.target.value = ''; });
-$('remove-file').addEventListener('click', () => { selected = null; $('selected-file').hidden = true; $('dropzone').classList.remove('has-file'); setBusy(false); });
+$('remove-file').addEventListener('click', () => { selectionController?.abort(); selectionVersion++; preparing = false; $('batch-plan').hidden = true; selected = null; $('selected-file').hidden = true; $('dropzone').classList.remove('has-file'); setBusy(false); });
 for (const name of ['dragover', 'dragenter']) $('dropzone').addEventListener(name, event => { event.preventDefault(); if (!busy) $('dropzone').classList.add('dragging'); });
 for (const name of ['dragleave', 'drop']) $('dropzone').addEventListener(name, event => { event.preventDefault(); $('dropzone').classList.remove('dragging'); });
 $('dropzone').addEventListener('drop', event => {
@@ -75,58 +97,145 @@ function showResult() {
   $('result').hidden = false; updateLabels();
   $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-$('transcribe').addEventListener('click', async () => {
-  if (!selected || busy || !compatible) return;
-  notice(); result = null; $('result').hidden = true; controller = new AbortController();
-  const { signal } = controller, options = { ...settings }, file = selected;
-  let wakeLock, inputs;
-  setBusy(true); progress('Preparando seus arquivos…', 'Os áudios não serão enviados a um servidor.');
-  try {
-    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* Not required for transcription. */ }
-    inputs = await openInputs(file, options.order, signal); checkAbort(signal);
-    result = { title: $('document-title').value.trim() || 'Minha transcrição', createdAt: new Date().toISOString(), model: options.model, warnings: inputs.warnings, items: [], cancelled: false };
-    await client.request({ type: 'load', model: options.model }, signal, event => {
-      if (event.stage === 'download') {
-        const downloaded = event.loaded ? bytesLabel(event.loaded) : '';
-        progress('Baixando o modelo para este aparelho…', `${event.file || 'Modelo'} ${downloaded ? `· ${downloaded}` : ''}. Isso não é envio do seu áudio.`, Number.isFinite(event.progress) ? event.progress / 100 : null);
-      } else progress(event.message || 'Preparando Whisper…', 'No primeiro uso há download. Mantenha esta aba aberta.');
-    });
-    for (let i = 0; i < inputs.entries.length; i++) {
-      checkAbort(signal); const entry = inputs.entries[i];
-      const label = `Áudio ${i + 1} de ${inputs.entries.length}: ${entry.name}`;
-      progress('Lendo o áudio no navegador…', label);
-      try {
-        const blob = await entry.read(); checkAbort(signal);
-        const audio = await decodeAudio(blob, signal); checkAbort(signal);
-        progress('Transcrevendo neste aparelho…', `${label} · Mantenha a aba aberta.`);
-        const output = await client.request({ type: 'transcribe', audio: audio.samples, language: options.language }, signal, event => {
-          if (event.stage === 'inference') progress('Transcrevendo neste aparelho…', `${label} · ${event.completed} trecho(s) processado(s).`);
-        });
-        checkAbort(signal);
-        result.items.push({ name: entry.name, duration: audio.duration, ...output });
-      } catch (error) {
-        if (signal.aborted || error.name === 'AbortError') throw error;
-        result.items.push({ name: entry.name, error: String(error.message || error) });
-      }
+function clearBatches() {
+  for (const stage of batchRun?.stages || []) if (stage.url) URL.revokeObjectURL(stage.url);
+  batchRun = null; $('batch-results').hidden = true; $('batch-list').replaceChildren();
+  $('retry-batch').hidden = true;
+}
+function showBatches() {
+  if (!batchRun?.split) return;
+  $('batch-results').hidden = false;
+  const complete = batchRun.stages.filter(s => ['completed', 'partial'].includes(s.status)).length;
+  const ready = batchRun.stages.filter(s => s.pdf).length;
+  $('batches-summary').textContent = `${complete} de ${batchRun.stages.length} etapas processadas · ${ready} PDF(s) disponível(is)`
+    + (batchRun.cancelled ? ' · Processamento cancelado.' : batchRun.paused ? ' · Pausado: tente gerar o PDF para continuar.' : '');
+  $('retry-batch').hidden = !batchRun.paused;
+  const cards = batchRun.stages.map(stage => {
+    const card = document.createElement('article'); card.className = 'batch-card'; card.dataset.status = stage.status;
+    const title = document.createElement('h3'); title.textContent = `Etapa ${stage.number} de ${stage.total} — Áudios ${stage.first} a ${stage.last}`;
+    const info = document.createElement('p');
+    const ok = stage.result.items.filter(item => !item.error).length;
+    const states = {
+      pending: 'Aguardando a etapa anterior.', running: `Transcrevendo: ${stage.result.items.length} de ${stage.entries.length} áudios processados.`,
+      pdf: 'Preparando o PDF desta etapa…', 'pdf-error': 'As transcrições estão preservadas. Não foi possível gerar o PDF. A próxima etapa ainda não começou.',
+      completed: `${ok} áudios transcritos. PDF pronto para baixar.`,
+      partial: `${ok} de ${stage.entries.length} áudios transcritos. PDF parcial: os arquivos que falharam estão identificados.`,
+      cancelled: stage.result.items.length ? 'Etapa interrompida. Resultado parcial preservado; arquivos não processados estão identificados.' : 'Não iniciada: processamento cancelado.',
+    };
+    info.textContent = states[stage.status]; card.append(title, info);
+    if (stage.pdfError) { const error = document.createElement('p'); error.className = 'batch-error'; error.textContent = stage.pdfError; card.append(error); }
+    if (stage.pdf?.substitutions) { const warning = document.createElement('p'); warning.textContent = 'Alguns símbolos foram substituídos no PDF. O TXT preserva todos os caracteres.'; card.append(warning); }
+    const actions = document.createElement('div'); actions.className = 'batch-actions';
+    if (stage.pdf) {
+      stage.url ||= URL.createObjectURL(stage.pdf.blob);
+      const link = document.createElement('a'); link.className = 'primary-button'; link.href = stage.url;
+      link.download = stageFilename(stage); link.textContent = `Baixar PDF — Etapa ${stage.number}${stage.status === 'completed' ? '' : ' (parcial)'}`;
+      actions.append(link);
+    } else if (stage.status === 'cancelled' && stage.result.items.length) {
+      const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Gerar PDF parcial';
+      const owner = batchRun;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try { stage.pdf = await makePDF(stage.result, owner.options); stage.pdfError = ''; }
+        catch (error) { stage.pdfError = String(error.message || error); }
+        finally { if (batchRun === owner) showBatches(); }
+      });
+      actions.append(button);
     }
-    progress('Processamento concluído', '', 1); showResult();
+    if (stage.result.items.length && !['running', 'pdf'].includes(stage.status)) {
+      const txt = document.createElement('button'); txt.className = 'secondary-button'; txt.textContent = `Baixar TXT — Etapa ${stage.number}`;
+      const options = batchRun.options;
+      txt.addEventListener('click', () => downloadBlob(new Blob(['\uFEFF' + transcriptText(stage.result, options)], { type: 'text/plain;charset=utf-8' }), stageFilename(stage, 'txt')));
+      actions.append(txt);
+    }
+    card.append(actions); return card;
+  });
+  $('batch-list').replaceChildren(...cards);
+}
+async function processStages(signal) {
+  const run = batchRun;
+  await executeBatches(run, {
+    signal,
+    transcribe: async (entry, stage, index) => {
+      const label = `Etapa ${stage.number} de ${stage.total} · Áudio ${stage.first + index} de ${run.totalFiles}: ${entry.name}`;
+      progress('Lendo o áudio no navegador…', label);
+      const blob = await entry.read(signal); checkAbort(signal);
+      const audio = await decodeAudio(blob, signal); checkAbort(signal);
+      progress('Transcrevendo neste aparelho…', `${label} · Mantenha a aba aberta.`);
+      const output = await client.request({ type: 'transcribe', audio: audio.samples, language: run.options.language }, signal, event => {
+        if (event.stage === 'inference') progress('Transcrevendo neste aparelho…', `${label} · ${event.completed} trecho(s) processado(s).`);
+      });
+      return { duration: audio.duration, ...output };
+    },
+    makePDF,
+    onUpdate: stage => {
+      showBatches();
+      if (stage.status === 'pdf') progress('Gerando o PDF da etapa…', `Etapa ${stage.number} de ${stage.total}. O PDF ficará disponível antes da próxima etapa.`);
+      if (stage.pdf && !stage.announced) { stage.announced = true; toast(`PDF da etapa ${stage.number} disponível para baixar.`); }
+    },
+  });
+  if (run.split) {
+    showBatches();
+    if (run.paused) notice('O texto desta etapa foi preservado, mas o PDF não pôde ser gerado. Clique em “Tentar gerar PDF e continuar”. Os áudios já transcritos não serão repetidos.');
+    else if (run.cancelled) notice('Processamento cancelado. Os PDFs concluídos continuam disponíveis nesta aba.');
+  } else {
+    result = run.stages[0].result;
+    if (result.items.length) showResult();
+    if (run.cancelled) notice('Processamento cancelado. O resultado parcial está identificado.');
+  }
+}
+async function withProcessing(task) {
+  controller = new AbortController(); const { signal } = controller;
+  let wakeLock; setBusy(true); notice();
+  try {
+    try { wakeLock = await navigator.wakeLock?.request('screen'); } catch { /* Optional. */ }
+    await task(signal);
   } catch (error) {
     if (signal.aborted || error.name === 'AbortError') {
-      if (result && inputs && result.items.length) {
-        result.cancelled = true;
-        for (const entry of inputs.entries.slice(result.items.length)) result.items.push({ name: entry.name, error: 'Não processado: operação cancelada.' });
-        showResult();
-      } else result = null;
-      notice('Processamento cancelado. Nenhum áudio foi enviado a um servidor.');
+      if (batchRun) {
+        batchRun.cancelled = true; batchRun.paused = false;
+        for (const stage of batchRun.stages) if (stage.status === 'pending') stage.status = 'cancelled';
+        showBatches();
+      }
+      notice('Processamento cancelado. Os resultados já concluídos continuam nesta aba.');
     } else {
-      if (!result?.items.length) result = null;
-      notice(`Não foi possível iniciar a transcrição. ${String(error.message || error)}. Confira sua conexão para baixar o modelo e tente o modelo Leve nas configurações.`);
+      notice(`Não foi possível continuar. ${String(error.message || error)}. Os PDFs já gerados continuam disponíveis.`);
       client.stop();
     }
   } finally {
     await wakeLock?.release().catch(() => {});
     controller = null; setBusy(false);
   }
+}
+$('transcribe').addEventListener('click', async () => {
+  if (!selected || busy || preparing || !compatible) return;
+  const file = selected, options = { ...settings };
+  clearBatches(); result = null; $('result').hidden = true;
+  await withProcessing(async signal => {
+    progress('Preparando seus arquivos…', 'Os áudios não serão enviados a um servidor.');
+    const inputs = await openInputs(file, options.order, signal); checkAbort(signal);
+    batchRun = createBatchRun(inputs.entries, options, {
+      title: $('document-title').value.trim() || 'Minha transcrição', createdAt: new Date().toISOString(), warnings: inputs.warnings,
+    });
+    const message = batchMessage(inputs.entries.length);
+    if (message) { $('batch-plan').textContent = message; $('batch-plan').hidden = false; }
+    showBatches();
+    await client.request({ type: 'load', model: options.model }, signal, event => {
+      if (event.stage === 'download') {
+        const downloaded = event.loaded ? bytesLabel(event.loaded) : '';
+        progress('Baixando o modelo para este aparelho…', `${event.file || 'Modelo'} ${downloaded ? `· ${downloaded}` : ''}. Isso não é envio do seu áudio.`, Number.isFinite(event.progress) ? event.progress / 100 : null);
+      } else progress(event.message || 'Preparando Whisper…', 'No primeiro uso há download. Mantenha esta aba aberta.');
+    });
+    await processStages(signal);
+  });
+});
+$('retry-batch').addEventListener('click', async () => {
+  if (busy || !batchRun?.paused) return;
+  await withProcessing(processStages);
+});
+$('clear-batches').addEventListener('click', () => {
+  if (busy) return;
+  clearBatches(); client.stop(); notice(); setBusy(false);
 });
 $('cancel-job').addEventListener('click', () => { controller?.abort(); client.stop(); progress('Cancelando processamento…'); });
 $('copy-text').addEventListener('click', async () => {
@@ -148,9 +257,9 @@ async function download(format) {
 }
 $('download').addEventListener('click', () => download(settings.output));
 $('download-other').addEventListener('click', () => download(settings.output === 'pdf' ? 'txt' : 'pdf'));
-$('delete-job').addEventListener('click', () => { result = null; $('transcript').value = ''; $('result').hidden = true; client.stop(); toast('Transcrição removida desta página.'); });
-window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
+$('delete-job').addEventListener('click', () => { clearBatches(); result = null; $('transcript').value = ''; $('result').hidden = true; client.stop(); toast('Transcrição removida desta página.'); });
+window.addEventListener('beforeunload', event => { if (busy || batchRun?.stages.some(stage => stage.result.items.length)) { event.preventDefault(); event.returnValue = ''; } });
 const compatible = Boolean(globalThis.Worker && globalThis.WebAssembly && (globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext));
 if (!compatible) notice('Este navegador não oferece os recursos necessários. Abra o Escriba em um navegador atualizado.');
-$('size-hint').textContent = `ZIP até ${bytesLabel(LIMITS.upload)} · Cada áudio até ${bytesLabel(LIMITS.audio)} / 30 min`;
+$('size-hint').textContent = `ZIP até ${bytesLabel(LIMITS.upload)} · Cada áudio até ${bytesLabel(LIMITS.audio)} / 30 min · Até 100 áudios por etapa`;
 updateLabels(); setBusy(false);

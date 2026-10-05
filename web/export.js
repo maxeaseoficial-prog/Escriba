@@ -22,8 +22,12 @@ export function wrapText(text, width, measure) {
   }
   lines.push(line); return lines;
 }
+let pdfLibrary;
+export function loadPDFLibrary() {
+  return pdfLibrary ||= import(PDF_URL).catch(error => { pdfLibrary = null; throw error; });
+}
 export async function makePDF(result, options) {
-  const { PDFDocument, StandardFonts, rgb } = await import(PDF_URL);
+  const { PDFDocument, StandardFonts, rgb } = await loadPDFLibrary();
   const pdf = await PDFDocument.create();
   const normal = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const purple = rgb(0.43, 0.32, 0.69), ink = rgb(0.17, 0.18, 0.22), muted = rgb(0.46, 0.47, 0.51);
@@ -48,7 +52,13 @@ export async function makePDF(result, options) {
   newPage();
   paragraph(result.title || 'Minha transcrição', 22, bold, purple); y -= 9;
   paragraph(`Gerado em ${new Date(result.createdAt).toLocaleString('pt-BR')} · ${result.items.length} áudio(s) listado(s)`, 9, normal, muted);
-  paragraph('A data acima é de geração do documento, não de gravação.', 9, normal, muted); y -= 15;
+  paragraph('A data acima é de geração do documento, não de gravação.', 9, normal, muted);
+  if (result.batch) {
+    const b = result.batch;
+    paragraph(`Etapa ${b.number} de ${b.total} · Áudios ${b.first} a ${b.last} de ${b.totalFiles}`, 10, bold, purple);
+    if (!result.cancelled && result.items.some(item => item.error)) paragraph('Documento parcial: há áudios não transcritos, identificados abaixo.', 10, bold);
+  }
+  y -= 15;
   for (const line of transcriptText(result, options).split('\n')) paragraph(line);
   if (result.warnings.length) { y -= 12; paragraph('Avisos do processamento', 11, bold); for (const warning of result.warnings) paragraph(warning, 9, normal, muted); }
   if (substitutions) paragraph('Alguns caracteres não disponíveis na fonte foram substituídos por ?. O TXT preserva todos os caracteres.', 9, normal, muted);

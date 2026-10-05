@@ -70,7 +70,8 @@ run('ZIP corrupt CRC rejected', async () => { const x=await openInputs(zipFixtur
 run('ZIP without audio rejected', async () => assert.rejects(()=>openInputs(zipFixture([{name:'nested.zip'},{name:'_chat.txt'}])),/Nenhum áudio/));
 run('ZIP extraction respects cancellation', async () => { const c=new AbortController(); const x=await openInputs(zipFixture([{name:'voice.mp3'}]),'name',c.signal); c.abort(); await assert.rejects(()=>x.entries[0].read(),{name:'AbortError'}); });
 run('truncated ZIP rejected', async () => assert.rejects(()=>openInputs(new File(['PK'],'broken.zip')),/ler este ZIP/));
-run('ZIP max audio count enforced', async () => assert.rejects(()=>openInputs(zipFixture(Array.from({length:101},(_,i)=>({name:i+'.mp3'})))),/100 áudios/));
+run('ZIP safety entry count enforced', async () => assert.rejects(()=>openInputs(zipFixture(Array.from({length:LIMITS.entries+1},(_,i)=>({name:i+'.mp3'})))),/limites/));
+for (const count of [100,101,120,200,201,1000]) run(`ZIP with ${count} audios accepted for staged processing`, async () => { const x=await openInputs(zipFixture(Array.from({length:count},(_,i)=>({name:`audio-${i+1}.mp3`,text:`conteúdo ${i+1}`}))), 'name'); assert.equal(x.entries.length,count); for(let i=0;i<count;i++) assert.equal(await(await x.entries[i].read()).text(),`conteúdo ${i+1}`); });
 const result = { items: [{name:'one.mp3',text:'Olá, Henrique.',chunks:[{text:'Olá, Henrique.',timestamp:[0,null]}]},{name:'two.mp3',error:'Arquivo inválido.'}], cancelled:false };
 run('plain text keeps every failure visible', () => assert.match(transcriptText(result,{organized:false}),/Olá, Henrique\.\n\[Não transcrito: two.mp3/));
 run('organized text includes filenames', () => assert.match(transcriptText(result,{organized:true}),/1. one.mp3/));
@@ -79,3 +80,5 @@ run('cancelled result explicitly marked partial', () => assert.match(transcriptT
 run('output filename neutralizes path characters', () => assert.equal(filenameFor('../a:b','pdf'),'..-a-b.pdf'));
 run('PDF wrapping splits long words without dropping characters', () => assert.deepEqual(wrapText('abcdef',3,s=>s.length),['abc','def']));
 run('Vercel publishes only dist, without Python API', async () => { const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url))); assert.equal(config.outputDirectory,'dist'); assert.equal(config.framework,null); assert.equal(config.functions,undefined); });
+
+run('ZIP retry accepts the current cancellation signal', async () => { const old=new AbortController(), current=new AbortController(); const x=await openInputs(zipFixture([{name:'voice.mp3'}]),'name',old.signal); current.abort(); await assert.rejects(()=>x.entries[0].read(current.signal),{name:'AbortError'}); });

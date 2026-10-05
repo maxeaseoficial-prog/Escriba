@@ -1,12 +1,12 @@
 # Escriba 2 — Whisper no navegador
 
-Painel branco e lilás para transcrever um áudio ou um ZIP com vários áudios, compilando o resultado em TXT ou PDF. A versão web roda o reconhecimento **no aparelho de quem abriu o site**, usando Whisper multilingual via Transformers.js e ONNX Runtime/WebAssembly. **Sem API paga de transcrição, sem chave de IA, sem servidor de inferência e sem Supabase nesta etapa.**
+Painel branco e lilás para transcrever um áudio ou um ZIP com vários áudios, compilando o resultado em TXT ou PDF. ZIPs com mais de 100 áudios são divididos automaticamente em etapas de até 100, cada uma com seu próprio PDF. A versão web roda o reconhecimento **no aparelho de quem abriu o site**, usando Whisper multilingual via Transformers.js e ONNX Runtime/WebAssembly. **Sem API paga de transcrição, sem chave de IA, sem servidor de inferência e sem Supabase nesta etapa.**
 
 ## Como esta versão funciona
 
 1. A Vercel entrega HTML, CSS e JavaScript estáticos.
 2. Ao clicar em Transcrever, o navegador baixa as bibliotecas e o modelo aberto necessário. O download é de arquivos de software/pesos, não uma chamada a um serviço de transcrição.
-3. Um Web Worker executa o Whisper na CPU do aparelho. O ZIP é lido localmente e seus áudios são processados um por vez.
+3. Um Web Worker executa o Whisper na CPU do aparelho. O ZIP é lido localmente e seus áudios são processados um por vez, em etapas de até 100.
 4. O texto fica na memória da aba. TXT e PDF são preparados no navegador.
 
 **O áudio não é enviado à Vercel, Hugging Face, OpenAI ou Supabase pela versão web.** O aplicativo não pede microfone, não usa Web Speech API e não usa endpoint de inferência. A versão anterior Python permanece como alternativa, mas não participa do deploy web.
@@ -28,6 +28,22 @@ Importe o repositório `maxeaseoficial-prog/Escriba`, branch `main`, usando a ra
 O arquivo `vercel.json` já define build, saída e cabeçalhos. Se o projeto existente estava configurado como FastAPI/Python, ajuste o preset e remova overrides antigos. Não configure `uvicorn`, Docker ou `requirements.txt` como comandos deste deploy. O build copia somente a interface web e seus assets para `dist`; não publica o backend Python.
 
 **Deploy público ainda não foi executado pelo assistente.** A configuração foi preparada no GitHub. O teste de aceite com modelo real continua pendente; consulte `docs/VALIDACAO-WEB.md`.
+
+## ZIPs com mais de 100 áudios
+
+A divisão é automática e obrigatória. Antes de iniciar, o painel conta os áudios e informa as etapas. A ordem escolhida (data/nome/ordem do ZIP) é aplicada ao lote inteiro antes da divisão.
+
+- 120 áudios: etapa 1, áudios 1–100; etapa 2, áudios 101–120. Dois PDFs.
+- 200 áudios: dois PDFs de 100, sem etapa vazia.
+- 250 áudios: três PDFs de 100, 100 e 50.
+
+Cada etapa transcreve seus arquivos em sequência, gera um PDF organizado e libera o botão de download **antes de começar a etapa seguinte**. Não é preciso reenviar o ZIP nem clicar para iniciar a próxima etapa. O PDF da primeira etapa continua disponível enquanto as outras são processadas. O navegador não recebe uma sequência de downloads automáticos: use o botão de cada etapa para salvar seu PDF.
+
+Para mais de 100 áudios, PDF e separação por áudio são obrigatórios, mesmo quando a preferência geral estiver em TXT/texto corrido. O TXT é oferecido adicionalmente por etapa. Os nomes dos PDFs incluem a etapa e o intervalo de áudios; a numeração dos áudios continua de 101 na segunda etapa. Até 100 áudios, o fluxo anterior e as preferências são mantidos.
+
+Se a geração de um PDF falhar, o processamento **pausa antes da etapa seguinte**. O texto fica preservado na memória da aba. O botão **Tentar gerar PDF e continuar** repete a exportação e segue o restante, sem transcrever novamente os arquivos concluídos. Cancelar mantém os PDFs já gerados; a etapa interrompida é identificada como parcial. Arquivos com falha não são omitidos nem apresentados como transcritos.
+
+Dividir em etapas não elimina os limites totais de tamanho do ZIP nem garante estabilidade/velocidade para duas horas de áudio em qualquer aparelho. Sem banco nesta etapa: fechar ou recarregar a aba perde o estado. Consulte `docs/VALIDACAO-ETAPAS.md` para os testes executados e as limitações.
 
 ## Desenvolvimento local
 
@@ -56,7 +72,7 @@ Esta primeira versão web usa **WebAssembly na CPU, em um Web Worker**; não exi
 ## Arquivos e limites iniciais
 
 - Um áudio de até **50 MB / 30 minutos**, ou um ZIP de até **200 MB**.
-- Até **100 áudios**, **1.000 entradas** e **500 MB descompactados** por ZIP. Cada áudio também deve respeitar 50 MB / 30 minutos.
+- Até **1.000 áudios**, **1.000 entradas** e **500 MB descompactados** por ZIP. Cada áudio também deve respeitar 50 MB / 30 minutos.
 - Extensões selecionáveis: MP3, WAV, M4A, OGG, OPUS, FLAC, AAC, WEBM e MP4. A decodificação depende dos codecs suportados pelo navegador: extensão aceita não garante compatibilidade. Em caso de erro, use MP3/WAV ou um navegador atualizado; WMA/AIFF não são oferecidos nesta versão web.
 - ZIP comum, armazenado sem compressão ou Deflate. ZIP64, multipartes, com senha, links simbólicos, caminhos inseguros, duplicatas de áudio e compressão excessiva são recusados. Tamanho real e CRC são conferidos durante a leitura.
 - ZIPs são lidos com APIs nativas (`Blob`, `DecompressionStream`), um áudio por vez, sem biblioteca paga. Textos, fotos e ZIPs aninhados são ignorados com aviso. Não há leitura do `_chat.txt` nem identificação de interlocutores.

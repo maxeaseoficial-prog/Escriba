@@ -1,4 +1,4 @@
-export const LIMITS = Object.freeze({ upload: 200 * 1024 ** 2, audio: 50 * 1024 ** 2, expanded: 500 * 1024 ** 2, entries: 1000, files: 100, duration: 30 * 60 });
+export const LIMITS = Object.freeze({ upload: 200 * 1024 ** 2, audio: 50 * 1024 ** 2, expanded: 500 * 1024 ** 2, entries: 1000, files: 1000, duration: 30 * 60 });
 export const AUDIO = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'aac', 'webm', 'mp4']);
 export const DEFAULTS = Object.freeze({ output: 'pdf', language: 'pt', order: 'date', organized: true, timestamps: false, model: 'base' });
 export const extension = name => String(name).split('.').pop().toLowerCase();
@@ -49,7 +49,7 @@ export function transcriptText(result, options) {
   if (!result) return '';
   const sections = result.items.map((item, index) => {
     const date = dateFromName(item.name);
-    const heading = options.organized ? `${index + 1}. ${item.name}${date ? `\nData identificada no nome: ${date.label}` : ''}\n\n` : '';
+    const heading = options.organized ? `${(result.batch?.first || 1) + index}. ${item.name}${date ? `\nData identificada no nome: ${date.label}` : ''}\n\n` : '';
     if (item.error) return `${heading}[Não transcrito: ${item.name} — ${item.error}]`;
     const text = options.timestamps && item.chunks?.length
       ? item.chunks.map(c => `[${timeLabel(c.timestamp?.[0])} – ${timeLabel(c.timestamp?.[1])}] ${c.text.trim()}`).join('\n')

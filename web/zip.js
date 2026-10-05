@@ -56,10 +56,10 @@ export async function openInputs(file, order = 'date', signal) {
     if (seen.has(name)) fail('O ZIP contém nomes de áudio duplicados.');
     seen.add(name);
     if (!uncompressed || uncompressed > LIMITS.audio) fail(`Áudio vazio ou maior que 50 MB: ${name}`);
-    if (entries.length >= LIMITS.files) fail('Use no máximo 100 áudios por ZIP.');
+    if (entries.length >= LIMITS.files) fail(`Use no máximo ${LIMITS.files} áudios por ZIP, divididos em etapas de 100.`);
     if (![0, 8].includes(method)) fail(`Compressão não suportada em ${name}. Use ZIP padrão (Deflate).`);
-    entries.push({ name, index, read: async () => {
-      checkAbort(signal);
+    entries.push({ name, index, read: async (readSignal = signal) => {
+      checkAbort(readSignal);
       const header = await read(file, local, 30), h = new DataView(header.buffer);
       if (u32(h, 0) !== 0x04034b50 || u16(h, 8) !== method || u16(h, 6) !== flags) fail('Cabeçalho de áudio inválido no ZIP.');
       const start = local + 30 + u16(h, 26) + u16(h, 28);
@@ -73,23 +73,23 @@ export async function openInputs(file, order = 'date', signal) {
       }
       const reader = stream.getReader(); const chunks = []; let total = 0;
       const onAbort = () => { void reader.cancel().catch(() => {}); };
-      signal?.addEventListener('abort', onAbort, { once: true });
+      readSignal?.addEventListener('abort', onAbort, { once: true });
       try {
         while (true) {
-          checkAbort(signal);
+          checkAbort(readSignal);
           const { done, value } = await reader.read();
           if (done) break;
           total += value.byteLength;
           if (total > uncompressed || total > LIMITS.audio) fail('Tamanho descompactado excede o permitido.');
           chunks.push(value);
         }
-        checkAbort(signal);
+        checkAbort(readSignal);
         if (total !== uncompressed) fail('Tamanho do áudio divergente no ZIP.');
         const data = new Uint8Array(total); let position = 0;
         for (const chunk of chunks) { data.set(chunk, position); position += chunk.byteLength; }
         if (crc32(data) !== crc) fail('Áudio corrompido no ZIP (CRC inválido).');
         return new Blob([data]);
-      } finally { signal?.removeEventListener('abort', onAbort); await reader.cancel().catch(() => {}); }
+      } finally { readSignal?.removeEventListener('abort', onAbort); await reader.cancel().catch(() => {}); }
     } });
   }
   if (!entries.length) fail('Nenhum áudio compatível encontrado no ZIP.');
