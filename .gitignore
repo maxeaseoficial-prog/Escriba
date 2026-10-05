@@ -10,3 +10,8 @@ data/
 node_modules/
 .DS_Store
 *.log
+
+# Browser build
+node_modules/
+dist/
+.vercel/

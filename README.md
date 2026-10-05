@@ -1,108 +1,93 @@
-# Escriba
+# Escriba 2 — Whisper no navegador
 
-Painel simples, branco e lilás para transformar **um áudio ou um ZIP com vários áudios** em **PDF ou texto**, reunindo todas as transcrições em um documento. Interface em português, com identidade de lápis, sem cadastro, sem banco externo e sem chave de API de IA.
+Painel branco e lilás para transcrever um áudio ou um ZIP com vários áudios, compilando o resultado em TXT ou PDF. A versão web roda o reconhecimento **no aparelho de quem abriu o site**, usando Whisper multilingual via Transformers.js e ONNX Runtime/WebAssembly. **Sem API paga de transcrição, sem chave de IA, sem servidor de inferência e sem Supabase nesta etapa.**
 
-## Começar pelo Docker
+## Como esta versão funciona
 
-Com Docker e Docker Compose instalados:
+1. A Vercel entrega HTML, CSS e JavaScript estáticos.
+2. Ao clicar em Transcrever, o navegador baixa as bibliotecas e o modelo aberto necessário. O download é de arquivos de software/pesos, não uma chamada a um serviço de transcrição.
+3. Um Web Worker executa o Whisper na CPU do aparelho. O ZIP é lido localmente e seus áudios são processados um por vez.
+4. O texto fica na memória da aba. TXT e PDF são preparados no navegador.
 
-```bash
-git clone https://github.com/maxeaseoficial-prog/Escriba.git
-cd Escriba
-docker compose up --build
-```
+**O áudio não é enviado à Vercel, Hugging Face, OpenAI ou Supabase pela versão web.** O aplicativo não pede microfone, não usa Web Speech API e não usa endpoint de inferência. A versão anterior Python permanece como alternativa, mas não participa do deploy web.
 
-Abra **http://localhost:8000**. O serviço fica acessível somente no próprio computador por padrão. O primeiro processamento baixa o modelo Whisper `small`; é necessário acesso à internet nessa etapa. Depois do download, o modelo é reutilizado no armazenamento local.
+## Publicar na Vercel
 
-Para encerrar: `docker compose down`. Os modelos e resultados ainda não expirados permanecem no volume `escriba-data`.
+Importe o repositório `maxeaseoficial-prog/Escriba`, branch `main`, usando a raiz do repositório.
 
-## Rodar sem Docker (macOS / Linux)
+| Configuração | Valor |
+|---|---|
+| Framework Preset | Other |
+| Root Directory | raiz do repositório, `.` |
+| Build Command | `npm run build` |
+| Output Directory | `dist` |
+| Install Command | `node --version` (não há pacotes npm para instalar) |
+| Node.js | 22.x |
+| Variáveis de ambiente / chaves de IA | nenhuma |
 
-Use **Python 3.11 ou 3.12**. No macOS, instale Python e FFmpeg (por exemplo, `brew install python@3.12 ffmpeg`), depois:
+O arquivo `vercel.json` já define build, saída e cabeçalhos. Se o projeto existente estava configurado como FastAPI/Python, ajuste o preset e remova overrides antigos. Não configure `uvicorn`, Docker ou `requirements.txt` como comandos deste deploy. O build copia somente a interface web e seus assets para `dist`; não publica o backend Python.
 
-```bash
-git clone https://github.com/maxeaseoficial-prog/Escriba.git
-cd Escriba
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-bash scripts/start.sh
-```
+**Deploy público ainda não foi executado pelo assistente.** A configuração foi preparada no GitHub. O teste de aceite com modelo real continua pendente; consulte `docs/VALIDACAO-WEB.md`.
 
-Abra **http://localhost:8000**. No Linux, instale também FFmpeg e, para PDFs Unicode, `fonts-dejavu-core` pelo gerenciador do sistema. No Windows, instale Python e FFmpeg, use `.venv\Scripts\activate` e execute `python -m uvicorn escriba.app:app --host 127.0.0.1 --port 8000 --workers 1`.
+## Desenvolvimento local
 
-## Uso
-
-1. Selecione um áudio ou um arquivo ZIP. Para vários áudios, coloque todos em um ZIP.
-2. Dê um nome ao documento, se desejar. Em **Configurações**, escolha PDF/TXT, idioma, ordem dos arquivos, separação por áudio e marcação dos tempos.
-3. Clique **Transcrever arquivo**. Acompanhe o envio e o processamento de cada áudio.
-4. Copie o texto ou baixe o resultado. Os dois formatos podem ser baixados sem transcrever novamente.
-
-A configuração **Separar por áudio** inclui os nomes dos arquivos; desative-a para texto corrido. O aplicativo **transcreve**, não resume nem reescreve o conteúdo. Revise nomes próprios, números e trechos de áudio difíceis.
-
-## Arquivos e organização
-
-- Formatos: MP3, WAV, M4A, OGG, OPUS (incluindo áudio de WhatsApp), FLAC, AAC, AIFF, WMA, WEBM e MP4 com faixa de áudio, além de ZIP.
-- Até **500 MB** por envio, **100 áudios** por ZIP e **1 GB** de conteúdo descompactado. Cada áudio do ZIP pode ter até 300 MB. Limite de **2 horas por áudio**. Esses limites são definidos em `escriba/config.py`.
-- ZIPs com senha, links simbólicos, caminhos inseguros ou compressão excessiva são recusados. ZIPs dentro de ZIPs não são processados.
-- Documentos, fotos e arquivos como `_chat.txt` são ignorados, com aviso na interface. Esta versão **não interpreta o histórico do WhatsApp nem identifica interlocutores**.
-- Ordenação por data reconhecida no **nome**, nome natural (`1, 2, 10`) ou ordem do ZIP. Nomes como `AUDIO-2026-10-05-14-12-31.opus` fornecem data e hora; `PTT-20261005-WA0001.opus` fornece somente data. Arquivos sem data vão depois dos datados, por nome. Nunca é usada a data de modificação do ZIP como data da gravação.
-- A transcrição de cada arquivo é preservada. Falhas parciais aparecem na interface e no documento; um arquivo com erro não é silenciosamente omitido.
-
-## Motor de transcrição
-
-O motor é **faster-whisper**, uma implementação do Whisper baseada em CTranslate2:
-
-- https://github.com/SYSTRAN/faster-whisper
-- https://github.com/openai/whisper
-
-Padrão: `small`, CPU e `int8`, idioma português. Para um computador mais limitado, altere o modelo para `base` ou `tiny`, aceitando a possível perda de precisão. Não há cobrança por minuto de API nesta implementação, mas o processamento usa CPU, memória, disco e energia da máquina. A duração do processamento depende do hardware e dos áudios.
+Node 22, sem instalar dependências:
 
 ```bash
-ESCRIBA_MODEL=base bash scripts/start.sh
+npm run dev
+# http://localhost:4173
+npm test
+npm run build
+npm run preview
 ```
 
-Com Docker Compose, crie `.env` a partir de `.env.example` e ajuste `ESCRIBA_MODEL`. Rodando Python diretamente, exporte as variáveis no terminal: o `.env` não é carregado automaticamente.
+O acesso à internet é necessário para baixar bibliotecas e modelo no navegador. O build em si não precisa de internet. Não abra `web/index.html` via `file://`: Web Workers e módulos devem ser servidos por HTTP/HTTPS.
 
-## Sobre o repositório RTK fornecido como referência
+## Modelos e desempenho
 
-Referência analisada: **https://github.com/rtk-ai/rtk**.
+- **Whisper Base (Equilibrado):** padrão.
+- **Whisper Tiny (Leve):** opção para aparelhos limitados; pode reconhecer menos precisamente.
+- **Whisper Small:** maior demanda de download, memória e CPU; precisão deve ser avaliada nos áudios reais.
 
-O RTK é um utilitário Rust para filtrar saídas de terminal e reduzir tokens usados por agentes de programação. **Ele não contém um motor de áudio, uma interface de transcrição ou exportação de transcrições.** Por isso, não foi renomeado nem apresentado falsamente como a base de reconhecimento de fala do Escriba. O painel e o fluxo de áudio foram implementados especificamente para este projeto.
+Todos os modelos são multilíngues, não as variantes `.en`. Português é o idioma padrão; também há Inglês, Espanhol e detecção automática. O código usa `task: transcribe`, não tradução. Áudios longos são enviados ao pipeline em trechos sobrepostos de 30 segundos, com remontagem pelo próprio pipeline.
 
-A referência está integrada como **ferramenta opcional de desenvolvimento**, sem ser uma dependência do aplicativo:
+Esta primeira versão web usa **WebAssembly na CPU, em um Web Worker**; não exige GPU nem `SharedArrayBuffer`. A velocidade depende do computador e pode ser lenta em áudios longos. Não há garantia de tempo real. Mantenha a aba aberta e o aparelho ligado; fechar, recarregar ou suspender o dispositivo pode interromper o trabalho. O aplicativo tenta manter a tela acordada quando o navegador permite, sem garantia.
 
-```bash
-bash scripts/rtk-dev.sh
-```
+## Arquivos e limites iniciais
 
-O script clona o RTK em `.tools/rtk` (ignorado pelo Git), preservando o código, licenças e avisos originais. A compilação requer Rust. Nada do RTK é instalado automaticamente, e ele não processa nem reduz o texto das transcrições. Nenhum componente de terceiros foi rebatizado como código próprio.
+- Um áudio de até **50 MB / 30 minutos**, ou um ZIP de até **200 MB**.
+- Até **100 áudios**, **1.000 entradas** e **500 MB descompactados** por ZIP. Cada áudio também deve respeitar 50 MB / 30 minutos.
+- Extensões selecionáveis: MP3, WAV, M4A, OGG, OPUS, FLAC, AAC, WEBM e MP4. A decodificação depende dos codecs suportados pelo navegador: extensão aceita não garante compatibilidade. Em caso de erro, use MP3/WAV ou um navegador atualizado; WMA/AIFF não são oferecidos nesta versão web.
+- ZIP comum, armazenado sem compressão ou Deflate. ZIP64, multipartes, com senha, links simbólicos, caminhos inseguros, duplicatas de áudio e compressão excessiva são recusados. Tamanho real e CRC são conferidos durante a leitura.
+- ZIPs são lidos com APIs nativas (`Blob`, `DecompressionStream`), um áudio por vez, sem biblioteca paga. Textos, fotos e ZIPs aninhados são ignorados com aviso. Não há leitura do `_chat.txt` nem identificação de interlocutores.
+- Ordenação por nome natural, ordem do ZIP ou data reconhecida no nome. Sem data conhecida, não se inventa horário. Datas do ZIP não são consideradas datas de gravação.
+- Falhas são incluídas no documento, não omitidas. Ao cancelar um lote parcialmente concluído, os resultados prontos podem ser baixados com identificação explícita dos demais arquivos não processados.
 
-## Privacidade, segurança e limites desta versão
+Os limites são escolhas iniciais para reduzir a pressão de memória, não uma garantia de que todo aparelho processará qualquer arquivo dentro deles. A decodificação de mídia usa o navegador; arquivos pequenos também podem representar longos áudios.
 
-**Aplicação local e de usuário único.** O servidor e o processador rodam na mesma máquina. Áudios não são enviados a provedores de IA. Quando hospedado em outra máquina, o navegador envia os arquivos para esse servidor — nesse caso, “local” significa local ao servidor, não ao navegador.
+## Resultado, privacidade e dependências
 
-Os áudios enviados e extraídos são apagados ao concluir, falhar ou cancelar. Os resultados ficam na pasta `data/jobs` por até 24 horas desde a última atualização e são removidos pela limpeza periódica (até 60 segundos de tolerância), ou pelo botão **Excluir transcrição**. O cache dos modelos permanece. Não há histórico público nem listagem de trabalhos.
+O texto pode ser organizado por áudio ou corrido, com marcações de tempo opcionais. Após a transcrição, essas opções e PDF/TXT podem mudar sem executar o Whisper novamente. Revise nomes, números, repetições e trechos difíceis. Uma transcrição automática pode conter erros, inclusive em silêncio ou ruído.
 
-O código aplica limite durante a leitura do upload, validação do ZIP, execução de FFmpeg sem shell, bloqueio de playlists/protocolos de rede, proteção de origem nas mutações, validação de host, política de conteúdo e URLs de trabalho imprevisíveis. Preferências ficam no navegador; a chave opcional de acesso ao servidor fica apenas na memória da página.
+As transcrições **não são persistidas**: ficam somente nesta aba. Baixe antes de fechá-la. Apenas preferências vão para `localStorage`. O botão Excluir transcrição remove o resultado da página; o navegador gerencia a liberação da memória. Os arquivos originais do usuário nunca são apagados pelo aplicativo.
 
-Para expor na internet, configure **HTTPS**, domínio explícito em `ESCRIBA_ALLOWED_HOSTS` e `ESCRIBA_ACCESS_TOKEN` aleatório com pelo menos 32 caracteres. O app recusa configuração de host remoto sem token adequado. Também configure limites de upload, tempo limite, autenticação e rate limiting no proxy. A configuração Compose fornecida permanece deliberadamente limitada a `127.0.0.1`.
+O modelo pode ser mantido no cache do navegador. Esse cache pode ser recusado ou apagado pelo navegador, exigir novo download ou faltar espaço. Não há promessa de operação totalmente offline: a biblioteca JavaScript, o runtime e o modelo precisam estar disponíveis. A primeira carga pode ser grande e usar centenas de MB, dependendo do modelo.
 
-Use **um único worker Uvicorn**. A fila é local ao processo, executa um trabalho por vez e aceita até quatro trabalhos ativos (incluindo uploads). Após reinício, trabalhos concluídos são preservados; os interrompidos são marcados como falha e precisam de reenvio. Cancelamento de uma inferência/download em andamento é cooperativo, não instantâneo. Não é uma arquitetura multiusuário distribuída.
+Dependências de software abertas (não serviços de inferência):
 
-A hospedagem de uma página estática, sozinha, **não executa o Whisper**. Este repositório precisa de um processo Python persistente ou do contêiner Docker. Nada foi publicado via Lovable ou Vercel.
+- Transformers.js **3.8.1**, pacote completo `dist/transformers.min.js`, com ONNX Runtime incluído (Apache-2.0 / MIT): https://github.com/huggingface/transformers.js
+- Modelos `Xenova/whisper-tiny`, `Xenova/whisper-base`, `Xenova/whisper-small` (conversões ONNX do Whisper): https://huggingface.co/Xenova/whisper-base
+- Whisper original (MIT): https://github.com/openai/whisper
+- PDF-Lib **1.17.1** (MIT), carregado somente ao gerar PDF: https://pdf-lib.js.org/
 
-## Desenvolvimento e testes
+As bibliotecas são carregadas do jsDelivr e os modelos do Hugging Face. Não exigem conta/chave para os modelos públicos usados. Essas origens recebem os pedidos de download e os metadados normais de rede, não os áudios. Para auto-hospedar tudo futuramente, copie os assets completos e ajuste `web/runtime-config.js` e a CSP; os pesos não foram incorporados ao repositório. Sem tarifa por minuto de inferência não significa ausência de consumo de CPU, energia, memória, internet ou eventuais custos/limites da hospedagem.
 
-A interface usa HTML/CSS/JavaScript nativos: não precisa de Node, build de frontend, CDN ou chaves no navegador.
+PDFs usam Helvetica/WinAnsi, com acentuação em português. Caracteres que a fonte não suporta são substituídos por `?`, com aviso; TXT preserva Unicode. Não há distribuição de arquivos de fonte.
 
-```bash
-python -m pip install -r requirements-dev.txt
-python -m pytest -q
-```
+## Estrutura
 
-Os testes automatizados usam um reconhecedor controlado exclusivamente em `tests/` para verificar fila, ZIP, formatos de saída e erros sem baixar modelos. Existe também teste de decodificação **real por FFmpeg** com modelo de teste. **Passar esses testes não equivale a validar precisão de transcrição com Whisper real.** Faça o teste de aceite com um áudio real após instalar as dependências e baixar o modelo.
+`web/` contém a aplicação para Vercel; `worker.js` / `engine.js` executam o reconhecimento; `audio.js` decodifica a 16 kHz; `zip.js` valida e extrai; `export.js` exporta; `tests-web/` contém os testes Node. O build reaproveita o CSS e o favicon da interface original em `escriba/static/`.
 
-Estrutura: `escriba/app.py` (API), `jobs.py` (fila/persistência), `ingest.py` (ZIP/ordenação), `engine.py` (FFmpeg/Whisper), `export.py` (PDF/TXT), `static/` (interface), `tests/` (testes).
+A implementação local Python original está preservada em `escriba/`, `Dockerfile` e `compose.yaml`; as instruções antigas foram movidas para `docs/LOCAL-PYTHON.md`. Os 27 testes Python documentados em `docs/VALIDACAO.md` pertencem à primeira versão e não comprovam a transcrição web.
 
-PDFs usam uma fonte Unicode instalada no sistema, quando disponível, sem distribuir arquivos de fonte no repositório. Na ausência dela, usam Helvetica com substituição de caracteres fora de Windows-1252. O Docker inclui DejaVu Sans pelo gerenciador de pacotes.
+O RTK enviado como referência continua sendo uma ferramenta opcional de desenvolvimento, não um motor de reconhecimento de fala. Nenhum código foi alterado diretamente na Lovable ou no painel da Vercel.

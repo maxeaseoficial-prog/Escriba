@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Escriba: transforme áudios e arquivos ZIP em transcrições organizadas. Exporte em PDF ou texto.">
+  <meta name="theme-color" content="#ffffff"><title>Escriba — Áudio em palavras</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/browser.css"><script type="module" src="/app.js"></script>
+</head>
+<body>
+<svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+ <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5Z"/><path d="M13 20h7"/></symbol>
+ <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+ <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+ <symbol id="i-audio" viewBox="0 0 24 24"><path d="M4 10v4m4-7v10m4-14v20m4-16v12m4-9v6"/></symbol>
+ <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Zm0 0v6h6M8 13h8m-8 4h5"/></symbol>
+ <symbol id="i-zip" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm11 3h2m-2 3h2m-2 3h2"/></symbol>
+ <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+ <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+ <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+ <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4m-4 5v2"/></symbol>
+ <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></symbol>
+ <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></symbol>
+</svg>
+<header class="header">
+ <a href="/" class="brand" aria-label="Escriba, início"><span class="brand-icon"><svg><use href="#i-pencil"/></svg></span>Escriba<span class="brand-dot">.</span></a>
+ <div class="header-actions"><span class="local-tag"><span></span> Transcrição neste aparelho</span><button class="settings-button" id="open-settings"><svg><use href="#i-settings"/></svg><span>Configurações</span></button></div>
+</header>
+<main>
+ <section class="intro" aria-labelledby="main-title">
+  <div class="eyebrow"><span></span> MENOS DIGITAÇÃO. MAIS POSSIBILIDADES.</div>
+  <h1 id="main-title">Do áudio para o texto.<br><span>Simples assim.</span></h1>
+  <p>Uma ideia, uma reunião ou vários áudios.<br>Transforme suas palavras em um documento organizado.</p>
+ </section>
+ <div class="browser-note"><strong>Sem API paga. Seus áudios ficam neste aparelho.</strong><span>No primeiro uso, o Whisper é baixado. Mantenha a aba aberta até terminar.</span></div>
+ <div id="notice" class="notice" role="alert" hidden></div>
+ <section class="workspace" aria-label="Nova transcrição">
+  <div class="workspace-top"><div><span class="step-dot">1</span><h2>Adicione seu arquivo</h2></div><span class="hint">Áudio ou ZIP</span></div>
+  <div class="dropzone" id="dropzone">
+   <div class="upload-art" aria-hidden="true"><span class="art-side"><svg><use href="#i-audio"/></svg></span><span class="art-center"><svg><use href="#i-upload"/></svg></span><span class="art-side"><svg><use href="#i-file"/></svg></span></div>
+   <h3>Solte seu áudio por aqui</h3><p>ou selecione um arquivo no seu computador</p>
+   <button id="choose-file" class="choose-button" type="button"><svg><use href="#i-upload"/></svg>Selecionar arquivo</button>
+   <input id="file-input" class="sr-only" type="file" accept=".mp3,.wav,.m4a,.ogg,.opus,.flac,.aac,.webm,.mp4,.zip" tabindex="-1" aria-label="Selecionar áudio ou ZIP">
+   <span class="file-types">MP3, WAV, M4A, OGG e outros · ZIP com vários áudios</span><span class="size-hint" id="size-hint">ZIP até 200 MB · Cada áudio até 50 MB / 30 min</span>
+  </div>
+  <div class="selected-file" id="selected-file" hidden><div class="file-icon"><svg><use href="#i-audio"/></svg></div><div class="file-detail"><strong id="file-name"></strong><span id="file-size"></span></div><button class="icon-button" id="remove-file" aria-label="Remover arquivo"><svg><use href="#i-close"/></svg></button></div>
+  <div class="document-options"><label for="document-title">Nome do documento <span>opcional</span></label><input id="document-title" type="text" maxlength="120" placeholder="Minha transcrição" autocomplete="off"></div>
+  <div class="workspace-bottom"><button class="output-summary" id="output-settings"><svg><use href="#i-file"/></svg><span id="output-label">Documento PDF</span><span class="change-label">Alterar</span></button><button id="transcribe" class="primary-button" disabled><svg><use href="#i-audio"/></svg>Transcrever arquivo<svg class="arrow"><use href="#i-arrow"/></svg></button></div>
+  <div id="progress-area" class="progress-area" hidden aria-live="polite"><div class="progress-heading"><strong id="progress-message">Preparando arquivos</strong><span id="progress-value"></span></div><progress id="progress-bar" max="100" value="0" aria-label="Progresso da transcrição"></progress><p id="current-file"></p><button class="text-button" id="cancel-job">Cancelar processamento</button></div>
+ </section>
+ <section id="result" class="result" hidden aria-labelledby="result-title"><div class="result-top"><div class="result-title"><span class="success-icon"><svg><use href="#i-check"/></svg></span><div><h2 id="result-title">Sua transcrição está pronta</h2><p id="result-meta"></p></div></div></div><div id="result-warning" class="notice" hidden></div><label for="transcript" class="sr-only">Texto transcrito</label><textarea id="transcript" readonly spellcheck="false"></textarea><div class="result-actions"><button id="copy-text" class="secondary-button"><svg><use href="#i-copy"/></svg>Copiar texto</button><div><button class="secondary-button" id="download-other">Baixar TXT</button><button class="primary-button" id="download"><svg><use href="#i-download"/></svg><span id="download-label">Baixar PDF</span></button></div></div><div class="result-foot"><span>Revise nomes e informações importantes antes de compartilhar.</span><button id="delete-job" class="text-button">Excluir transcrição</button></div></section>
+ <section class="benefits" aria-label="Como funciona"><div><span class="benefit-icon"><svg><use href="#i-zip"/></svg></span><h3>Um áudio ou vários</h3><p>Envie um ZIP e reúna tudo<br>em uma única transcrição.</p></div><div><span class="benefit-icon"><svg><use href="#i-file"/></svg></span><h3>Do seu jeito</h3><p>PDF organizado ou texto corrido.<br>Você escolhe o formato.</p></div><div><span class="benefit-icon"><svg><use href="#i-lock"/></svg></span><h3>Processamento local</h3><p>O Whisper roda no seu navegador.<br>Sem envio dos áudios para a nuvem.</p></div></section>
+</main>
+<footer><span>Escriba <span class="footer-dot">·</span> Áudio em palavras.</span><span>Escriba 2 · Sem API de transcrição.</span></footer>
+<dialog id="settings-dialog" aria-labelledby="settings-title"><form id="settings-form"><div class="dialog-header"><div><span class="eyebrow">DO SEU JEITO</span><h2 id="settings-title">Configurações</h2></div><button class="icon-button" type="button" id="close-settings" aria-label="Fechar configurações"><svg><use href="#i-close"/></svg></button></div>
+ <fieldset><legend>Formato de saída</legend><div class="format-grid"><label class="format-option"><input type="radio" name="output" value="pdf" checked><span><svg><use href="#i-file"/></svg><strong>Documento PDF</strong><small>Formatado e pronto para compartilhar</small></span></label><label class="format-option"><input type="radio" name="output" value="txt"><span><svg><use href="#i-pencil"/></svg><strong>Arquivo de texto</strong><small>Texto simples para copiar e editar</small></span></label></div></fieldset>
+ <div class="settings-row"><label for="language">Idioma do áudio</label><select id="language" name="language"><option value="pt">Português</option><option value="auto">Detectar automaticamente</option><option value="en">Inglês</option><option value="es">Espanhol</option></select></div>
+ <div class="settings-row"><label for="order">Ordem dos áudios no ZIP</label><select id="order" name="order"><option value="date">Data no nome; depois nome do arquivo</option><option value="name">Nome do arquivo (1, 2, 3…)</option><option value="archive">Ordem original do ZIP</option></select><small>Datas só são exibidas quando identificadas no nome. A data do ZIP não é considerada a data da gravação.</small></div>
+ <label class="check-row"><span><strong>Separar por áudio</strong><small>Inclui o nome de cada arquivo. Desative para texto corrido.</small></span><input type="checkbox" name="organized" checked></label>
+ <label class="check-row"><span><strong>Marcar o tempo dos trechos</strong><small>Mostra o minuto e segundo dentro de cada áudio.</small></span><input type="checkbox" name="timestamps"></label>
+ <div class="settings-row"><label for="model">Modelo Whisper</label><select id="model" name="model"><option value="tiny">Leve — Whisper Tiny</option><option value="base" selected>Equilibrado — Whisper Base</option><option value="small">Maior precisão potencial — Whisper Small</option></select><small>Modelos maiores exigem mais download, memória e processamento. Comece pelo Equilibrado; use Leve em aparelhos limitados. A transcrição automática pode conter erros.</small></div>
+ <div class="engine-note"><svg><use href="#i-lock"/></svg><p>Whisper no navegador, sem API de transcrição. O modelo e as bibliotecas são baixados da internet; os áudios não são enviados. O resultado fica só nesta aba: baixe antes de fechar. O navegador pode guardar o modelo em cache.</p></div>
+ <div class="dialog-actions"><button class="primary-button" type="submit">Salvar configurações<svg><use href="#i-check"/></svg></button></div>
+</form></dialog>
+<div id="toast" class="toast" role="status" hidden></div>
+</body></html>
