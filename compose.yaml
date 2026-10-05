@@ -1,0 +1,15 @@
+services:
+  escriba:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - escriba-data:/app/data
+    environment:
+      ESCRIBA_MODEL: ${ESCRIBA_MODEL:-small}
+      ESCRIBA_DEVICE: cpu
+      ESCRIBA_COMPUTE_TYPE: int8
+    restart: unless-stopped
+    init: true
+volumes:
+  escriba-data:
