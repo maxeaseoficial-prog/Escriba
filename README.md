@@ -71,13 +71,15 @@ Esta primeira versão web usa **WebAssembly na CPU, em um Web Worker**; não exi
 
 ## Arquivos e limites iniciais
 
-- Um áudio de até **50 MB / 30 minutos**, ou um ZIP de até **200 MB**.
-- Até **1.000 áudios**, **1.000 entradas** e **500 MB descompactados** por ZIP. Cada áudio também deve respeitar 50 MB / 30 minutos.
+- Um áudio de até **200 MB / 30 minutos**, ou um ZIP de até **200 MB**.
+- Até **1.000 áudios**, **1.000 entradas** e **500 MB descompactados** por ZIP. Cada áudio também deve respeitar 200 MB / 30 minutos.
 - Extensões selecionáveis: MP3, WAV, M4A, OGG, OPUS, FLAC, AAC, WEBM e MP4. A decodificação depende dos codecs suportados pelo navegador: extensão aceita não garante compatibilidade. Em caso de erro, use MP3/WAV ou um navegador atualizado; WMA/AIFF não são oferecidos nesta versão web.
 - ZIP comum, armazenado sem compressão ou Deflate. ZIP64, multipartes, com senha, links simbólicos, caminhos inseguros, duplicatas de áudio e compressão excessiva são recusados. Tamanho real e CRC são conferidos durante a leitura.
 - ZIPs são lidos com APIs nativas (`Blob`, `DecompressionStream`), um áudio por vez, sem biblioteca paga. Textos, fotos e ZIPs aninhados são ignorados com aviso. Não há leitura do `_chat.txt` nem identificação de interlocutores.
 - Ordenação por nome natural, ordem do ZIP ou data reconhecida no nome. Sem data conhecida, não se inventa horário. Datas do ZIP não são consideradas datas de gravação.
 - Falhas são incluídas no documento, não omitidas. Ao cancelar um lote parcialmente concluído, os resultados prontos podem ser baixados com identificação explícita dos demais arquivos não processados.
+
+O limite de 200 MB vale para o arquivo inteiro, inclusive a faixa de vídeo em MP4, e para cada áudio extraído de um ZIP. O teto de 200 MB do ZIP e os 30 minutos por áudio continuam independentes. Aumentar o limite de entrada não garante concluir a transcrição de arquivos grandes em todo aparelho.
 
 Os limites são escolhas iniciais para reduzir a pressão de memória, não uma garantia de que todo aparelho processará qualquer arquivo dentro deles. A decodificação de mídia usa o navegador; arquivos pequenos também podem representar longos áudios.
 

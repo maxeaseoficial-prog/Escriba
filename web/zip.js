@@ -1,4 +1,4 @@
-import { AUDIO, LIMITS, checkAbort, extension, sortEntries, validateFile } from './core.js';
+import { AUDIO, LIMITS, bytesLabel, checkAbort, extension, sortEntries, validateFile } from './core.js';
 const decoder = new TextDecoder('utf-8');
 const fail = message => { throw new Error(message); };
 const u16 = (view, n) => view.getUint16(n, true);
@@ -55,7 +55,7 @@ export async function openInputs(file, order = 'date', signal) {
     if (!AUDIO.has(extension(name))) { ignored++; continue; }
     if (seen.has(name)) fail('O ZIP contém nomes de áudio duplicados.');
     seen.add(name);
-    if (!uncompressed || uncompressed > LIMITS.audio) fail(`Áudio vazio ou maior que 50 MB: ${name}`);
+    if (!uncompressed || uncompressed > LIMITS.audio) fail(`Áudio vazio ou maior que ${bytesLabel(LIMITS.audio)}: ${name}`);
     if (entries.length >= LIMITS.files) fail(`Use no máximo ${LIMITS.files} áudios por ZIP, divididos em etapas de 100.`);
     if (![0, 8].includes(method)) fail(`Compressão não suportada em ${name}. Use ZIP padrão (Deflate).`);
     entries.push({ name, index, read: async (readSignal = signal) => {
