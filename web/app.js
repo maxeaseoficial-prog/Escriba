@@ -4,11 +4,13 @@ import { decodeAudio } from './audio.js';
 import { WhisperClient } from './worker-client.js';
 import { downloadBlob, filenameFor, makePDF } from './export.js';
 import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js';
+import { estimateRemaining, formatEta } from './eta.js';
 const $ = id => document.getElementById(id);
 const PREFS_KEY = 'escriba.browser.settings.v2';
 let settings = { ...DEFAULTS }, selected = null, busy = false, controller = null, result = null, toastTimer;
 const client = new WhisperClient();
 let batchRun = null, preparing = false, selectionVersion = 0, selectionController;
+let etaState = null;
 try { settings = optionsFrom(JSON.parse(localStorage.getItem(PREFS_KEY))); } catch { /* Private mode or invalid preferences: use defaults. */ }
 function notice(message = '') { $('notice').textContent = message; $('notice').hidden = !message; }
 function toast(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => { $('toast').hidden = true; }, 4500); }
@@ -34,6 +36,29 @@ function progress(message, detail = '', fraction = null) {
   $('current-file').textContent = detail;
   if (fraction === null) { $('progress-bar').removeAttribute('value'); $('progress-value').textContent = ''; }
   else { const percent = Math.round(Math.max(0, Math.min(1, fraction)) * 100); $('progress-bar').value = percent; $('progress-value').textContent = `${percent}%`; }
+}
+function resetEta(run = null) {
+  if (!run) { etaState = null; $('eta-box').hidden = true; return; }
+  let processedAudioSeconds = 0, processedFiles = 0;
+  for (const stage of run.stages) for (const item of stage.result.items) {
+    if (!item.error && Number.isFinite(item.duration)) processedAudioSeconds += item.duration;
+    processedFiles++;
+  }
+  etaState = { startedAt: performance.now(), processedAudioSeconds, processedFiles, currentAudioSeconds: 0, currentChunks: 0, totalFiles: run.totalFiles };
+  $('eta-box').hidden = false;
+  $('eta-value').textContent = 'Calculando tempo estimado…';
+}
+function updateEta() {
+  if (!etaState) return;
+  const seconds = estimateRemaining({
+    elapsedSeconds: (performance.now() - etaState.startedAt) / 1000,
+    processedAudioSeconds: etaState.processedAudioSeconds,
+    processedFiles: etaState.processedFiles,
+    currentAudioSeconds: etaState.currentAudioSeconds,
+    currentChunks: etaState.currentChunks,
+    totalFiles: etaState.totalFiles,
+  });
+  $('eta-value').textContent = seconds === null ? 'Calculando tempo estimado…' : `Tempo estimado para terminar: ${formatEta(seconds)}`;
 }
 async function selectFile(file) {
   if (busy || !file) return;
@@ -154,6 +179,7 @@ function showBatches() {
 }
 async function processStages(signal) {
   const run = batchRun;
+  resetEta(run);
   await executeBatches(run, {
     signal,
     transcribe: async (entry, stage, index) => {
@@ -161,10 +187,12 @@ async function processStages(signal) {
       progress('Lendo o áudio no navegador…', label);
       const blob = await entry.read(signal); checkAbort(signal);
       const audio = await decodeAudio(blob, signal); checkAbort(signal);
+      etaState.currentAudioSeconds = audio.duration; etaState.currentChunks = 0; updateEta();
       progress('Transcrevendo neste aparelho…', `${label} · Mantenha a aba aberta.`);
       const output = await client.request({ type: 'transcribe', audio: audio.samples, language: run.options.language }, signal, event => {
-        if (event.stage === 'inference') progress('Transcrevendo neste aparelho…', `${label} · ${event.completed} trecho(s) processado(s).`);
+        if (event.stage === 'inference') { etaState.currentChunks = event.completed; updateEta(); progress('Transcrevendo neste aparelho…', `${label} · ${event.completed} trecho(s) processado(s).`); }
       });
+      etaState.processedAudioSeconds += audio.duration; etaState.processedFiles += 1; etaState.currentAudioSeconds = 0; etaState.currentChunks = 0; updateEta();
       return { duration: audio.duration, ...output };
     },
     makePDF,
@@ -204,7 +232,7 @@ async function withProcessing(task) {
     }
   } finally {
     await wakeLock?.release().catch(() => {});
-    controller = null; setBusy(false);
+    controller = null; resetEta(); setBusy(false);
   }
 }
 $('transcribe').addEventListener('click', async () => {

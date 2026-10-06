@@ -6,3 +6,5 @@
 .brand-logo{display:block;width:176px;height:auto;object-fit:contain}
 @media(max-width:650px){.brand-logo{width:144px}}
 @media(max-width:360px){.brand-logo{width:128px}}
+
+.eta-box{display:flex;align-items:flex-start;gap:11px;margin:14px 0 10px;padding:13px 15px;border:1px solid #d8caec;border-radius:10px;background:#f7f2fd;color:#5f4a7a}.eta-dot{width:8px;height:8px;border-radius:50%;background:#8f6bc3;box-shadow:0 0 0 4px #eadff8;margin-top:5px;flex:0 0 auto}.eta-box strong{display:block;font-size:12px;font-weight:650;line-height:1.45}.eta-box small{display:block;margin-top:3px;color:#7c6c90;font-size:10px;line-height:1.45}.eta-box[hidden]{display:none}
