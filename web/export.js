@@ -1,5 +1,5 @@
-import { transcriptText } from './core.js';
-import { PDF_URL } from './runtime-config.js';
+import { transcriptText } from './core.js?v=20261009-500mb-4h';
+import { PDF_URL } from './runtime-config.js?v=20261009-500mb-4h';
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob), link = document.createElement('a');
   link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();

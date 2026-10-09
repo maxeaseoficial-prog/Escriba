@@ -1,4 +1,4 @@
-import { LIMITS, checkAbort } from './core.js';
+import { LIMITS, checkAbort } from './core.js?v=20261009-500mb-4h';
 export async function decodeAudio(blob, signal) {
   checkAbort(signal);
   const AudioContext = globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;

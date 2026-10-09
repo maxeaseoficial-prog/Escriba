@@ -1,10 +1,10 @@
-import { DEFAULTS, LIMITS, optionsFrom, validateFile, bytesLabel, checkAbort, transcriptText } from './core.js';
-import { openInputs } from './zip.js';
-import { decodeAudio } from './audio.js';
-import { WhisperClient } from './worker-client.js';
-import { downloadBlob, filenameFor, makePDF } from './export.js';
-import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js';
-import { estimateRemaining, formatEta } from './eta.js';
+import { DEFAULTS, LIMITS, optionsFrom, validateFile, bytesLabel, checkAbort, transcriptText } from './core.js?v=20261009-500mb-4h';
+import { openInputs } from './zip.js?v=20261009-500mb-4h';
+import { decodeAudio } from './audio.js?v=20261009-500mb-4h';
+import { WhisperClient } from './worker-client.js?v=20261009-500mb-4h';
+import { downloadBlob, filenameFor, makePDF } from './export.js?v=20261009-500mb-4h';
+import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js?v=20261009-500mb-4h';
+import { estimateRemaining, formatEta } from './eta.js?v=20261009-500mb-4h';
 const $ = id => document.getElementById(id);
 const PREFS_KEY = 'escriba.browser.settings.v2';
 let settings = { ...DEFAULTS }, selected = null, busy = false, controller = null, result = null, toastTimer;

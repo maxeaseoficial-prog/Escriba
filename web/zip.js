@@ -1,4 +1,4 @@
-import { AUDIO, LIMITS, bytesLabel, checkAbort, extension, sortEntries, validateFile } from './core.js';
+import { AUDIO, LIMITS, bytesLabel, checkAbort, extension, sortEntries, validateFile } from './core.js?v=20261009-500mb-4h';
 const decoder = new TextDecoder('utf-8');
 const fail = message => { throw new Error(message); };
 const u16 = (view, n) => view.getUint16(n, true);

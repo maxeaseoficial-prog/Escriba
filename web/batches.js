@@ -1,4 +1,4 @@
-import { LIMITS, checkAbort, optionsFrom } from './core.js';
+import { LIMITS, checkAbort, optionsFrom } from './core.js?v=20261009-500mb-4h';
 
 export const BATCH_SIZE = 100;
 const finished = new Set(['completed', 'partial']);
