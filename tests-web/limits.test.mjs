@@ -32,37 +32,37 @@ function zipFixture(entries) {
   return new File([...locals, directory, end], 'test.zip');
 }
 
-test('200 MB per file; duration and all ZIP limits remain unchanged', () => {
-  assert.deepEqual(LIMITS, { upload: 200 * MB, audio: 200 * MB, expanded: 500 * MB, entries: 1000, files: 1000, duration: 1800 });
+test('500 MB per file and four-hour duration are configured', () => {
+  assert.deepEqual(LIMITS, { upload: 500 * MB, audio: 500 * MB, expanded: 1024 * MB, entries: 1000, files: 1000, duration: 14400 });
 });
-for (const size of [50 * MB + 1, 100 * MB, 200 * MB]) {
+for (const size of [50 * MB + 1, 200 * MB, 500 * MB]) {
   test(`all supported file extensions accept size metadata ${size}`, () => {
     for (const ext of AUDIO) assert.doesNotThrow(() => validateFile({ name: `media.${ext}`, size }));
     assert.doesNotThrow(() => validateFile({ name: 'VIDEO.MP4', size }));
   });
 }
-test('a file one byte above 200 MB is rejected with the updated limit', () => {
-  assert.throws(() => validateFile({ name: 'video.mp4', size: 200 * MB + 1 }), /200 MB/);
+test('a file one byte above 500 MB is rejected with the updated limit', () => {
+  assert.throws(() => validateFile({ name: 'video.mp4', size: 500 * MB + 1 }), /500 MB/);
 });
-test('the entire ZIP still cannot exceed 200 MB', () => {
-  assert.doesNotThrow(() => validateFile({ name: 'audio.zip', size: 200 * MB }));
-  assert.throws(() => validateFile({ name: 'audio.zip', size: 200 * MB + 1 }), /200 MB.*ZIP/);
+test('the entire ZIP can reach 500 MB', () => {
+  assert.doesNotThrow(() => validateFile({ name: 'audio.zip', size: 500 * MB }));
+  assert.throws(() => validateFile({ name: 'audio.zip', size: 500 * MB + 1 }), /500 MB.*ZIP/);
 });
 test('empty files and unsupported extensions remain rejected', () => {
   assert.throws(() => validateFile({ name: 'audio.mp3', size: 0 }), /vazio/);
   assert.throws(() => validateFile({ name: 'audio.exe', size: 100 * MB }), /compatível/);
 });
-test('ZIP entry size metadata above 50 MB and up to 200 MB is accepted', async () => {
-  for (const size of [50 * MB + 1, 150 * MB, 200 * MB]) {
+test('ZIP entry size metadata above 50 MB and up to 500 MB is accepted', async () => {
+  for (const size of [50 * MB + 1, 200 * MB, 500 * MB]) {
     const inputs = await openInputs(zipFixture([{ name: 'video.mp4', size }]));
     assert.equal(inputs.entries.length, 1);
   }
 });
-test('ZIP entry metadata above 200 MB is rejected before extraction', async () => {
-  await assert.rejects(() => openInputs(zipFixture([{ name: 'video.mp4', size: 200 * MB + 1 }])), /maior que 200 MB/);
+test('ZIP entry metadata above 500 MB is rejected before extraction', async () => {
+  await assert.rejects(() => openInputs(zipFixture([{ name: 'video.mp4', size: 500 * MB + 1 }])), /maior que 500 MB/);
 });
-test('ZIP aggregate expanded limit stays at 500 MB', async () => {
-  await assert.rejects(() => openInputs(zipFixture([1, 2, 3].map(i => ({ name: `${i}.mp3`, size: 170 * MB })))), /limite descompactado/);
+test('ZIP aggregate expanded limit is 1 GB', async () => {
+  await assert.rejects(() => openInputs(zipFixture([1, 2, 3].map(i => ({ name: `${i}.mp3`, size: 350 * MB })))), /limite descompactado/);
 });
 test('a real stored ZIP still extracts exact bytes and validates CRC', async () => {
   const payload = Buffer.from('Conteúdo de teste de extração, não uma transcrição.');
@@ -77,23 +77,23 @@ test('a 120-entry ZIP is still accepted for the existing staged workflow', async
   assert.equal(inputs.entries.length, 120);
   assert.equal(inputs.entries[100].name, '101.mp3');
 });
-test('the 30-minute duration guard remains enforced after decoding', async () => {
+test('the four-hour duration guard remains enforced after decoding', async () => {
   const original = globalThis.OfflineAudioContext;
   // Controlled decoder output only; this test does not decode or transcribe a real recording.
   globalThis.OfflineAudioContext = class {
-    async decodeAudioData() { return { length: 1, duration: 1801 }; }
+    async decodeAudioData() { return { length: 1, duration: 14401 }; }
   };
-  try { await assert.rejects(() => decodeAudio(new Blob(['test'])), /30 minutos/); }
+  try { await assert.rejects(() => decodeAudio(new Blob(['test'])), /4 horas/); }
   finally {
     if (original === undefined) delete globalThis.OfflineAudioContext;
     else globalThis.OfflineAudioContext = original;
   }
 });
-test('the fallback interface and documentation show 200 MB, not the obsolete 50 MB', async () => {
+test('the fallback interface and documentation show 500 MB and 4 h', async () => {
   const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
-  assert.match(html, /Cada áudio até 200 MB \/ 30 min/);
-  assert.match(readme, /200 MB \/ 30 minutos/);
+  assert.match(html, /Cada áudio até 500 MB \/ 4 h/);
+  assert.match(readme, /500 MB \/ 4 horas/);
   assert.doesNotMatch(html, /50 MB/);
   assert.doesNotMatch(readme, /50 MB/);
 });

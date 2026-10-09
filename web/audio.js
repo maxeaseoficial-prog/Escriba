@@ -9,7 +9,7 @@ export async function decodeAudio(blob, signal) {
   catch { throw new Error('Áudio inválido ou codec não suportado neste navegador. Tente MP3 ou WAV, ou abra no Chrome/Edge atualizado.'); }
   checkAbort(signal);
   if (!buffer.length || !Number.isFinite(buffer.duration)) throw new Error('Áudio vazio ou com duração inválida.');
-  if (buffer.duration > LIMITS.duration) throw new Error('Nesta versão, cada áudio pode ter até 30 minutos. Divida os áudios maiores.');
+  if (buffer.duration > LIMITS.duration) throw new Error('Nesta versão, cada áudio pode ter até 4 horas. Divida os áudios maiores.');
   const samples = new Float32Array(buffer.length);
   for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
     const data = buffer.getChannelData(channel);
