@@ -1,4 +1,4 @@
-import { loadModel, recognize } from './engine.js?v=20261009-500mb-4h';
+import { loadModel, recognize } from './engine.js?v=20261010-large-media';
 let busy = false;
 self.onmessage = async ({ data }) => {
   const { id, type, model, language, audio } = data;

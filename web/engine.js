@@ -1,4 +1,4 @@
-import { TRANSFORMERS_URL, MODEL_HOST, MODELS } from './runtime-config.js?v=20261009-500mb-4h';
+import { TRANSFORMERS_URL, MODEL_HOST, MODELS } from './runtime-config.js?v=20261010-large-media';
 let library, recognizer, activeModel;
 export function recognitionOptions(language, onChunk) {
   const names = { pt: 'portuguese', en: 'english', es: 'spanish' };

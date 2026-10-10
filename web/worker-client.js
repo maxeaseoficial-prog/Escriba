@@ -1,9 +1,9 @@
-import { abortError, checkAbort } from './core.js?v=20261009-500mb-4h';
+import { abortError, checkAbort } from './core.js?v=20261010-large-media';
 export class WhisperClient {
   constructor() { this.worker = null; this.pending = null; this.sequence = 0; }
   ensureWorker() {
     if (this.worker) return;
-    this.worker = new Worker(new URL('./worker.js?v=20261009-500mb-4h', import.meta.url), { type: 'module', name: 'escriba-whisper' });
+    this.worker = new Worker(new URL('./worker.js?v=20261010-large-media', import.meta.url), { type: 'module', name: 'escriba-whisper' });
     this.worker.onmessage = ({ data }) => {
       const job = this.pending;
       if (!job || data.id !== job.id) return;

@@ -1,8 +1,8 @@
-export const LIMITS = Object.freeze({ upload: 500 * 1024 ** 2, audio: 500 * 1024 ** 2, expanded: 1024 * 1024 ** 2, entries: 1000, files: 1000, duration: 4 * 60 * 60 });
-export const AUDIO = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'aac', 'webm', 'mp4']);
+export const LIMITS = Object.freeze({ upload: 1536 * 1024 ** 2, audio: 1536 * 1024 ** 2, expanded: 3 * 1024 ** 3, entries: 1000, files: 1000, duration: 8 * 60 * 60 });
+export const AUDIO = new Set(['mp3', 'wav', 'm4a', 'ogg', 'opus', 'flac', 'aac', 'webm', 'mp4', 'mov']);
 export const DEFAULTS = Object.freeze({ output: 'pdf', language: 'pt', order: 'date', organized: true, timestamps: false, model: 'base' });
 export const extension = name => String(name).split('.').pop().toLowerCase();
-export const bytesLabel = value => `${(value / 1024 ** 2).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+export const bytesLabel = value => value >= 1024 ** 3 ? `${(value / 1024 ** 3).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB` : `${(value / 1024 ** 2).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
 export const abortError = () => new DOMException('Processamento cancelado.', 'AbortError');
 export function checkAbort(signal) { if (signal?.aborted) throw abortError(); }
 export function optionsFrom(value = {}) {

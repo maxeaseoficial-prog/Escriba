@@ -5,7 +5,7 @@
   <meta name="description" content="Escriba: transforme áudios e arquivos ZIP em transcrições organizadas. Exporte em PDF ou texto.">
   <meta name="theme-color" content="#ffffff"><title>Escriba — Áudio em palavras</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/browser.css"><script type="module" src="/app.js?v=20261009-500mb-4h"></script>
+  <link rel="stylesheet" href="/browser.css"><script type="module" src="/app.js?v=20261010-large-media"></script>
 </head>
 <body>
 <svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -40,8 +40,8 @@
    <div class="upload-art" aria-hidden="true"><span class="art-side"><svg><use href="#i-audio"/></svg></span><span class="art-center"><svg><use href="#i-upload"/></svg></span><span class="art-side"><svg><use href="#i-file"/></svg></span></div>
    <h3>Solte seu áudio por aqui</h3><p>ou selecione um arquivo no seu computador</p>
    <button id="choose-file" class="choose-button" type="button"><svg><use href="#i-upload"/></svg>Selecionar arquivo</button>
-   <input id="file-input" class="sr-only" type="file" accept=".mp3,.wav,.m4a,.ogg,.opus,.flac,.aac,.webm,.mp4,.zip" tabindex="-1" aria-label="Selecionar áudio ou ZIP">
-   <span class="file-types">MP3, WAV, M4A, OGG e outros · ZIP com vários áudios</span><span class="size-hint" id="size-hint">ZIP até 500 MB · Cada áudio até 500 MB / 4 h</span>
+   <input id="file-input" class="sr-only" type="file" accept=".mp3,.wav,.m4a,.ogg,.opus,.flac,.aac,.webm,.mp4,.mov,.zip" tabindex="-1" aria-label="Selecionar áudio ou ZIP">
+   <span class="file-types">MP3, WAV, M4A, MP4, MOV e outros · ZIP com vários arquivos</span><span class="size-hint" id="size-hint">Arquivo ou ZIP até 1,5 GB · Até 8 h por áudio/vídeo</span>
   </div>
   <div class="selected-file" id="selected-file" hidden><div class="file-icon"><svg><use href="#i-audio"/></svg></div><div class="file-detail"><strong id="file-name"></strong><span id="file-size"></span></div><button class="icon-button" id="remove-file" aria-label="Remover arquivo"><svg><use href="#i-close"/></svg></button></div>
   <div id="batch-plan" class="batch-plan" role="status" hidden></div>

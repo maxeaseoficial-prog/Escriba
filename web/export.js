@@ -1,5 +1,5 @@
-import { transcriptText } from './core.js?v=20261009-500mb-4h';
-import { PDF_URL } from './runtime-config.js?v=20261009-500mb-4h';
+import { transcriptText } from './core.js?v=20261010-large-media';
+import { PDF_URL } from './runtime-config.js?v=20261010-large-media';
 export function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob), link = document.createElement('a');
   link.href = url; link.download = filename; document.body.append(link); link.click(); link.remove();
@@ -26,6 +26,7 @@ let pdfLibrary;
 export function loadPDFLibrary() {
   return pdfLibrary ||= import(PDF_URL).catch(error => { pdfLibrary = null; throw error; });
 }
+export const MAX_PDF_PAGES = 80;
 export async function makePDF(result, options) {
   const { PDFDocument, StandardFonts, rgb } = await loadPDFLibrary();
   const pdf = await PDFDocument.create();
@@ -68,5 +69,18 @@ export async function makePDF(result, options) {
     item.drawText(`${i + 1} / ${pages.length}`, { x: 514, y: 35, size: 8, font: normal, color: muted });
   });
   pdf.setTitle(safe(result.title || 'Transcrição Escriba')); pdf.setCreator('Escriba — processamento no navegador');
-  return { blob: new Blob([await pdf.save()], { type: 'application/pdf' }), substitutions };
+  const fullBlob = new Blob([await pdf.save()], { type: 'application/pdf' });
+  const parts = [];
+  if (pages.length > MAX_PDF_PAGES) {
+    for (let start = 0; start < pages.length; start += MAX_PDF_PAGES) {
+      const end = Math.min(pages.length, start + MAX_PDF_PAGES);
+      const part = await PDFDocument.create();
+      const copied = await part.copyPages(pdf, Array.from({ length: end - start }, (_, i) => start + i));
+      copied.forEach(page => part.addPage(page));
+      part.setTitle(safe(`${result.title || 'Transcrição Escriba'} — Parte ${parts.length + 1}`));
+      part.setCreator('Escriba — processamento no navegador');
+      parts.push({ blob: new Blob([await part.save()], { type: 'application/pdf' }), firstPage: start + 1, lastPage: end });
+    }
+  }
+  return { blob: fullBlob, substitutions, parts, totalPages: pages.length };
 }

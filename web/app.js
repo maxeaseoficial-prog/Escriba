@@ -1,10 +1,10 @@
-import { DEFAULTS, LIMITS, optionsFrom, validateFile, bytesLabel, checkAbort, transcriptText } from './core.js?v=20261009-500mb-4h';
-import { openInputs } from './zip.js?v=20261009-500mb-4h';
-import { decodeAudio } from './audio.js?v=20261009-500mb-4h';
-import { WhisperClient } from './worker-client.js?v=20261009-500mb-4h';
-import { downloadBlob, filenameFor, makePDF } from './export.js?v=20261009-500mb-4h';
-import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js?v=20261009-500mb-4h';
-import { estimateRemaining, formatEta } from './eta.js?v=20261009-500mb-4h';
+import { DEFAULTS, LIMITS, optionsFrom, validateFile, bytesLabel, checkAbort, transcriptText } from './core.js?v=20261010-large-media';
+import { openInputs } from './zip.js?v=20261010-large-media';
+import { decodeAudio } from './audio.js?v=20261010-large-media';
+import { WhisperClient } from './worker-client.js?v=20261010-large-media';
+import { downloadBlob, filenameFor, makePDF } from './export.js?v=20261010-large-media';
+import { batchMessage, createBatchRun, executeBatches, stageFilename } from './batches.js?v=20261010-large-media';
+import { estimateRemaining, formatEta } from './eta.js?v=20261010-large-media';
 const $ = id => document.getElementById(id);
 const PREFS_KEY = 'escriba.browser.settings.v2';
 let settings = { ...DEFAULTS }, selected = null, busy = false, controller = null, result = null, toastTimer;
@@ -123,7 +123,7 @@ function showResult() {
   $('result').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function clearBatches() {
-  for (const stage of batchRun?.stages || []) if (stage.url) URL.revokeObjectURL(stage.url);
+  for (const stage of batchRun?.stages || []) { if (stage.url) URL.revokeObjectURL(stage.url); for (const url of stage.urls || []) URL.revokeObjectURL(url); }
   batchRun = null; $('batch-results').hidden = true; $('batch-list').replaceChildren();
   $('retry-batch').hidden = true;
 }
@@ -152,10 +152,20 @@ function showBatches() {
     if (stage.pdf?.substitutions) { const warning = document.createElement('p'); warning.textContent = 'Alguns símbolos foram substituídos no PDF. O TXT preserva todos os caracteres.'; card.append(warning); }
     const actions = document.createElement('div'); actions.className = 'batch-actions';
     if (stage.pdf) {
-      stage.url ||= URL.createObjectURL(stage.pdf.blob);
-      const link = document.createElement('a'); link.className = 'primary-button'; link.href = stage.url;
-      link.download = stageFilename(stage); link.textContent = `Baixar PDF — Etapa ${stage.number}${stage.status === 'completed' ? '' : ' (parcial)'}`;
-      actions.append(link);
+      if (stage.pdf.parts?.length > 1) {
+        stage.urls ||= stage.pdf.parts.map(part => URL.createObjectURL(part.blob));
+        stage.pdf.parts.forEach((part, i) => {
+          const link = document.createElement('a'); link.className = 'primary-button'; link.href = stage.urls[i];
+          link.download = stageFilename(stage).replace(/\.pdf$/, `-parte-${String(i + 1).padStart(2, '0')}-de-${String(stage.pdf.parts.length).padStart(2, '0')}.pdf`);
+          link.textContent = `PDF ${i + 1}/${stage.pdf.parts.length} — Etapa ${stage.number}`;
+          actions.append(link);
+        });
+      } else {
+        stage.url ||= URL.createObjectURL(stage.pdf.blob);
+        const link = document.createElement('a'); link.className = 'primary-button'; link.href = stage.url;
+        link.download = stageFilename(stage); link.textContent = `Baixar PDF — Etapa ${stage.number}${stage.status === 'completed' ? '' : ' (parcial)'}`;
+        actions.append(link);
+      }
     } else if (stage.status === 'cancelled' && stage.result.items.length) {
       const button = document.createElement('button'); button.className = 'secondary-button'; button.textContent = 'Gerar PDF parcial';
       const owner = batchRun;
@@ -189,9 +199,32 @@ async function processStages(signal) {
       const audio = await decodeAudio(blob, signal); checkAbort(signal);
       etaState.currentAudioSeconds = audio.duration; etaState.currentChunks = 0; updateEta();
       progress('Transcrevendo neste aparelho…', `${label} · Mantenha a aba aberta.`);
-      const output = await client.request({ type: 'transcribe', audio: audio.samples, language: run.options.language }, signal, event => {
-        if (event.stage === 'inference') { etaState.currentChunks = event.completed; updateEta(); progress('Transcrevendo neste aparelho…', `${label} · ${event.completed} trecho(s) processado(s).`); }
-      });
+      const PART_SECONDS = 30 * 60, PART_SAMPLES = PART_SECONDS * 16000;
+      const totalParts = Math.ceil(audio.samples.length / PART_SAMPLES);
+      const texts = [], chunks = [];
+      for (let part = 0; part < totalParts; part++) {
+        checkAbort(signal);
+        const start = part * PART_SAMPLES, end = Math.min(audio.samples.length, start + PART_SAMPLES);
+        const partAudio = audio.samples.slice(start, end);
+        progress('Transcrevendo neste aparelho…', `${label} · Parte ${part + 1} de ${totalParts}.`);
+        const partial = await client.request({ type: 'transcribe', audio: partAudio, language: run.options.language }, signal, event => {
+          if (event.stage === 'inference') {
+            etaState.currentChunks = part * Math.ceil(PART_SECONDS / 25) + event.completed;
+            updateEta();
+            progress('Transcrevendo neste aparelho…', `${label} · Parte ${part + 1} de ${totalParts} · ${event.completed} trecho(s).`);
+          }
+        });
+        if (partial.text?.trim()) texts.push(partial.text.trim());
+        const offset = part * PART_SECONDS;
+        for (const chunk of partial.chunks || []) {
+          const stamp = chunk.timestamp || [];
+          chunks.push({ ...chunk, timestamp: [
+            Number.isFinite(stamp[0]) ? stamp[0] + offset : stamp[0],
+            Number.isFinite(stamp[1]) ? stamp[1] + offset : stamp[1],
+          ] });
+        }
+      }
+      const output = { text: texts.join(' ').trim(), chunks };
       etaState.processedAudioSeconds += audio.duration; etaState.processedFiles += 1; etaState.currentAudioSeconds = 0; etaState.currentChunks = 0; updateEta();
       return { duration: audio.duration, ...output };
     },
@@ -277,7 +310,11 @@ async function download(format) {
     if (format === 'txt') downloadBlob(new Blob(['\uFEFF' + transcriptText(result, settings)], { type: 'text/plain;charset=utf-8' }), filenameFor(result.title, 'txt'));
     else {
       toast('Preparando o PDF neste navegador…');
-      const output = await makePDF(result, settings); downloadBlob(output.blob, filenameFor(result.title, 'pdf'));
+      const output = await makePDF(result, settings);
+      if (output.parts?.length > 1) {
+        output.parts.forEach((part, i) => downloadBlob(part.blob, filenameFor(`${result.title}-parte-${String(i + 1).padStart(2, '0')}-de-${String(output.parts.length).padStart(2, '0')}`, 'pdf')));
+        toast(`Transcrição grande: ${output.parts.length} PDFs foram preparados.`);
+      } else downloadBlob(output.blob, filenameFor(result.title, 'pdf'));
       if (output.substitutions) toast('Alguns símbolos não cabem na fonte do PDF. O TXT mantém todos os caracteres.');
     }
   } catch (error) { notice(`Não foi possível gerar o PDF. O texto continua disponível para copiar ou baixar em TXT. ${error.message || error}`); }
@@ -289,5 +326,5 @@ $('delete-job').addEventListener('click', () => { clearBatches(); result = null;
 window.addEventListener('beforeunload', event => { if (busy || batchRun?.stages.some(stage => stage.result.items.length)) { event.preventDefault(); event.returnValue = ''; } });
 const compatible = Boolean(globalThis.Worker && globalThis.WebAssembly && (globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext));
 if (!compatible) notice('Este navegador não oferece os recursos necessários. Abra o Escriba em um navegador atualizado.');
-$('size-hint').textContent = `ZIP até ${bytesLabel(LIMITS.upload)} · Cada áudio até ${bytesLabel(LIMITS.audio)} / 30 min · Até 100 áudios por etapa`;
+$('size-hint').textContent = `Arquivo ou ZIP até ${bytesLabel(LIMITS.upload)} · Até 8 h por áudio/vídeo · Até 100 arquivos por etapa`;
 updateLabels(); setBusy(false);
